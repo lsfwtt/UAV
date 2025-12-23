@@ -120,7 +120,6 @@ class Trainer(object):
                 pred = sliding_window_inference(self.model, data, self.base_size, self.step, self.device, tag)
 
                 self.miou.update(pred, mask)
-                self.pd_fa.update(pred, mask)
                 self.roc.update(pred, mask)
 
                 _, mean_iou = self.miou.get()

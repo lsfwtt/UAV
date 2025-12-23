@@ -17,11 +17,11 @@ class ROCMetric():
         for iBin in range(self.bins+1):
             score_thresh = (iBin + 0.0) / self.bins
             i_tp, i_pos, i_fp, i_neg,i_class_pos = self.__cal_tp_pos_fp_neg(preds, labels, self.nclass,score_thresh)
-            self.tp_arr[iBin]   += i_tp
-            self.pos_arr[iBin]  += i_pos
-            self.fp_arr[iBin]   += i_fp
-            self.neg_arr[iBin]  += i_neg
-            self.class_pos[iBin]+=i_class_pos
+            self.tp_arr[iBin] += i_tp
+            self.pos_arr[iBin] += i_pos
+            self.fp_arr[iBin] += i_fp
+            self.neg_arr[iBin] += i_neg
+            self.class_pos[iBin] += i_class_pos
 
     def get(self):
         tp_rates    = self.tp_arr / (self.pos_arr + 0.001)
@@ -48,13 +48,13 @@ class ROCMetric():
         else:
             raise ValueError("Unknown target dimension")
 
-        tp = predict * ((predict == target).float()).sum()
-        fp = (predict * ((predict != target).float())).sum()
-        tn = ((1 - predict) * ((predict == target).float())).sum()
-        fn = (((predict != target).float()) * (1 - predict)).sum()
+        tp = torch.sum(predict * ((predict == target).float())).item()
+        fp = torch.sum((predict * ((predict != target).float()))).item()
+        tn = torch.sum(((1 - predict) * ((predict == target).float()))).item()
+        fn = torch.sum((((predict != target).float()) * (1 - predict))).item()
         pos = tp + fn
         neg = fp + tn
-        class_pos= tp+fp
+        class_pos = tp + fp
 
         return tp, pos, fp, neg, class_pos
 

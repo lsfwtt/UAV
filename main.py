@@ -9,7 +9,7 @@ def parse_args():
     parser.add_argument('--dataset-dir', type=str, default='/home/lsfwtt/UAV/datasets/dataset_test_cropped')
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=400)
-    parser.add_argument('--epoch-size', type=int, default=10000)
+    parser.add_argument('--epoch-size', type=int, default=16000)
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--warm-epoch', type=int, default=5)
     parser.add_argument('--save-dir', type=str, default='/home/lsfwtt/UAV/src/weight')
