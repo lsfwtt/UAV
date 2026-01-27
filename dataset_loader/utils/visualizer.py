@@ -55,9 +55,9 @@ def ensure_save_dirs(save_path):
     return img_dir, lbl_dir
 
 
-def visualize_yolo_dataset(dataset_root, check_point=None, save_path=None):
-    images_dir = os.path.join(dataset_root, "images")
-    labels_dir = os.path.join(dataset_root, "labels")
+def visualize_yolo_dataset(image_path, label_path, check_point=None, save_path=None):
+    images_dir = image_path
+    labels_dir = label_path
 
     img_paths = collect_images(images_dir)
     if not img_paths:
@@ -72,9 +72,10 @@ def visualize_yolo_dataset(dataset_root, check_point=None, save_path=None):
         else:
             raise ValueError(f"check-point image not found: {check_point}")
 
-    save_img_dir, save_lbl_dir = None, None
-    if save_path is not None:
+    save_img_dir, save_lbl_dir, save_vis_dir = None, None, None
+    if save_path:
         save_img_dir, save_lbl_dir = ensure_save_dirs(save_path)
+        save_vis_dir = ensure_visualized_dir(save_path)
 
     idx = start_idx
     win_name = "YOLO Dataset Viewer"
@@ -141,13 +142,28 @@ def visualize_yolo_dataset(dataset_root, check_point=None, save_path=None):
                     )
                 print(f"[SAVED] {os.path.basename(img_path)}")
             idx = (idx + 1) % len(img_paths)
+        
+        elif key == ord("v"):
+            if save_path is None or save_vis_dir is None:
+                print("[WARN] save-path not provided, skip visualized saving")
+            else:
+                vis_name = os.path.splitext(os.path.basename(img_path))[0] + "_vis.png"
+                vis_path = os.path.join(save_vis_dir, vis_name)
+                cv2.imwrite(vis_path, img)
+                print(f"[VIS SAVED] {vis_name}")
 
     cv2.destroyAllWindows()
+
+def ensure_visualized_dir(save_path):
+    vis_dir = os.path.join(save_path, "visualized")
+    os.makedirs(vis_dir, exist_ok=True)
+    return vis_dir
 
 
 def parse_args():
     parser = argparse.ArgumentParser("YOLO Dataset Visualizer")
-    parser.add_argument("--dataset-root", required=True, help="dataset root containing images/ and labels/")
+    parser.add_argument("--image-path", required=True, help="path to images directory")
+    parser.add_argument("--label-path", required=True, help="path to labels directory")
     parser.add_argument("--check-point", default=None, help="image name to start from, e.g. 000123.jpg")
     parser.add_argument("--save-path", default="", help="save selected images/labels")
     return parser.parse_args()
@@ -156,7 +172,9 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     visualize_yolo_dataset(
-        dataset_root=args.dataset_root,
+        image_path=args.image_path,
+        label_path=args.label_path,
         check_point=args.check_point,
         save_path=args.save_path,
     )
+

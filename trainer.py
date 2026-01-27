@@ -8,49 +8,72 @@ from model.loss import *
 import torch
 import torch.utils.data as Data
 from torch.optim import Adagrad
+import torch.distributed
+from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 import numpy as np
 import os
 import time
 
-os.environ['CUDA_VISIBLE_DEVICES']="0"
-
 class Trainer(object):
     def __init__(self, args):
         self.args = args
+        self.batch_size = self.args.batch_size
+        self.workers = self.args.workers
         self.warm_epoch = self.args.warm_epoch
         self.base_size = self.args.base_size
         self.step = self.args.step
-        self.device = torch.device('cuda')
         self.start_epoch = 0
         self.best_iou = 0
 
+        self.__build_device(self.args.device)
         self.__build_dataloaders()
         self.__build_model()
         self.__build_optimizer()
         self.__build_loss()
         self.__build_metric()
-        
-        print("CUDA available:", torch.cuda.is_available())
-        print("CUDA device count:", torch.cuda.device_count())
-        if torch.cuda.is_available():
-            print("GPU name:", torch.cuda.get_device_name(0))
-        print("Model device:", next(self.model.parameters()).device)
     
+    def __build_device(self, device_para):
+        if device_para == 'cpu':
+            self.device = torch.device('cpu')
+            self.device_ids = None
+        elif device_para in ['gpu', 'cuda']:
+            self.device = torch.device('cuda')
+            self.device_ids = None
+        else:
+            try:
+                device_ids = [int(x.strip()) for x in device_para.split(',')]
+                if torch.cuda.device_count() >= len(device_ids):
+                    self.device = torch.device(f'cuda:{device_ids[0]}')
+                    self.device_ids = device_ids
+            except ValueError:
+                raise ValueError(f"Invalid device parameter format:{device_para}. Must be 'gpu', 'cuda', or comma-separated GPU indices (e.g., '1,2,3').")
+
+        # DDP initialization
+        if self.device_ids is not None:
+            torch.distributed.init_process_group(backend='nccl')
+        
     def __build_dataloaders(self):
         trainset = Segmentation_Dataset_train(self.args, mode='train')
         valset = Segmentation_Dataset_val(self.args, mode='val')
 
-        self.train_loader = Data.DataLoader(trainset, self.args.batch_size, shuffle=True, drop_last=True, num_workers=8, pin_memory=True, persistent_workers=True)
-        self.val_loader = Data.DataLoader(valset, 1, drop_last=False, num_workers=4, pin_memory=True, persistent_workers=True)
+        if self.device_ids is not None:
+            train_sampler = DistributedSampler(trainset, shuffle=True)
+            val_sampler = DistributedSampler(valset, shuffle=True)
+
+            self.train_loader = Data.DataLoader(trainset, self.batch_size, shuffle=False, drop_last=True, num_workers=self.workers, pin_memory=True, persistent_workers=True, sampler=train_sampler)
+            self.val_loader = Data.DataLoader(valset, 1, drop_last=False, num_workers=4, pin_memory=True, persistent_workers=True, sampler=val_sampler)
+        else:
+            self.train_loader = Data.DataLoader(trainset, self.batch_size, shuffle=False, drop_last=True, num_workers=self.workers, pin_memory=True, persistent_workers=True)
+            self.val_loader = Data.DataLoader(valset, 1, drop_last=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
     def __build_model(self):
         model = HDNet(3)
-        if self.args.multi_gpus:
-            if torch.cuda.device_count() > 1:
-                print('use ' + str(torch.cuda.device_count()) + ' gpus')
-                model = nn.DataParallel(model, device_ids=[0, 1])
-        model.to(self.device)
+        if self.device_ids is not None:
+            print(f"use {len(self.device_ids)} GPUs: {', '.join(map(str, self.device_ids))}")
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=self.device_ids, output_device=self.device_ids[0])
+        else:
+            model.to(self.device)
         self.model = model
 
     def __build_optimizer(self):
@@ -84,6 +107,8 @@ class Trainer(object):
 
     def train(self, epoch):
         self.model.train()
+        if self.device_ids is not None:
+            self.train_loader.sampler.set_epoch(epoch)
         tbar = tqdm(self.train_loader)
         loss_all = AverageMeter()
         tag = epoch>self.warm_epoch
@@ -107,6 +132,8 @@ class Trainer(object):
 
     def validate(self, epoch):
         self.model.eval()
+        if self.device_ids is not None:
+            self.val_loader.sampler.set_epoch(epoch)
         self.miou.reset()
         self.roc.reset()
         tbar = tqdm(self.val_loader)
