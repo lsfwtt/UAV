@@ -126,7 +126,7 @@ class Trainer(object):
 
     def validate(self, epoch):
         self.model.eval()
-        if self.device_ids is not None:
+        if self.device_para in ['ddp', 'DDP']:
             self.val_loader.sampler.set_epoch(epoch)
         self.miou.reset()
         self.roc.reset()
