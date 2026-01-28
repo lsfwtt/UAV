@@ -18,6 +18,8 @@ import time
 class Trainer(object):
     def __init__(self, args):
         self.args = args
+        self.device_para = self.args.device
+        self.local_rank = self.args.local_rank
         self.batch_size = self.args.batch_size
         self.workers = self.args.workers
         self.warm_epoch = self.args.warm_epoch
@@ -26,38 +28,32 @@ class Trainer(object):
         self.start_epoch = 0
         self.best_iou = 0
 
-        self.__build_device(self.args.device)
+        self.__build_device()
         self.__build_dataloaders()
         self.__build_model()
         self.__build_optimizer()
         self.__build_loss()
         self.__build_metric()
     
-    def __build_device(self, device_para):
-        if device_para == 'cpu':
+    def __build_device(self):
+        if self.device_para == 'cpu':
             self.device = torch.device('cpu')
-            self.device_ids = None
-        elif device_para in ['gpu', 'cuda']:
+        elif self.device_para in ['gpu', 'cuda']:
             self.device = torch.device('cuda')
-            self.device_ids = None
-        else:
-            try:
-                device_ids = [int(x.strip()) for x in device_para.split(',')]
-                if torch.cuda.device_count() >= len(device_ids):
-                    self.device = torch.device(f'cuda:{device_ids[0]}')
-                    self.device_ids = device_ids
-            except ValueError:
-                raise ValueError(f"Invalid device parameter format:{device_para}. Must be 'gpu', 'cuda', or comma-separated GPU indices (e.g., '1,2,3').")
-
-        # DDP initialization
-        if self.device_ids is not None:
+        elif self.device_para in ['ddp', 'DDP']:
+            # DDP initialization
             torch.distributed.init_process_group(backend='nccl')
+            torch.cuda.set_device(self.local_rank)
+            self.device = torch.device(f'cuda:{self.local_rank}')
+        else:
+            raise ValueError(f"Invalid device parameter format:{self.device_para}. Must be 'gpu', 'cuda', or 'ddp'.")
+
         
     def __build_dataloaders(self):
         trainset = Segmentation_Dataset_train(self.args, mode='train')
         valset = Segmentation_Dataset_val(self.args, mode='val')
 
-        if self.device_ids is not None:
+        if self.device_para in ['ddp', 'DDP']:
             train_sampler = DistributedSampler(trainset, shuffle=True)
             val_sampler = DistributedSampler(valset, shuffle=True)
 
@@ -69,11 +65,9 @@ class Trainer(object):
 
     def __build_model(self):
         model = HDNet(3)
-        if self.device_ids is not None:
-            print(f"use {len(self.device_ids)} GPUs: {', '.join(map(str, self.device_ids))}")
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=self.device_ids, output_device=self.device_ids[0])
-        else:
-            model.to(self.device)
+        model.to(self.device)
+        if self.device_para in ['ddp', 'DDP']:
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
         self.model = model
 
     def __build_optimizer(self):
@@ -107,7 +101,7 @@ class Trainer(object):
 
     def train(self, epoch):
         self.model.train()
-        if self.device_ids is not None:
+        if self.device_para in ['ddp', 'DDP']:
             self.train_loader.sampler.set_epoch(epoch)
         tbar = tqdm(self.train_loader)
         loss_all = AverageMeter()

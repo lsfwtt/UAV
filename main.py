@@ -14,10 +14,11 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=0.05)
     parser.add_argument('--warm-epoch', type=int, default=5)
     parser.add_argument('--save-dir', type=str, default='/home/wanmingxuan/runs/UAV')
+    parser.add_argument('--local-rank', type=int, default=None)
 
     parser.add_argument('--base-size', type=int, default=256)
     parser.add_argument('--step', type=int, default=128)
-    parser.add_argument('--device', type=str, default='gpu', help="device setting: 'gpu', 'cpu', or '0,1,2'")
+    parser.add_argument('--device', type=str, default='gpu', help="device setting: 'gpu', 'cpu', or 'ddp'")
     parser.add_argument('--if-checkpoint', type=bool, default=False)
     parser.add_argument('--checkpoint-path', type=str, default='')
 

@@ -7,8 +7,6 @@ import torch.fft
 import numpy as np
 from model.MAC_Kernel import GenerateKernels, GenerateKernels3, GenerateKernels4
 
-os.environ['CUDA_VISIBLE_DEVICES']="0"
-
 kernels = GenerateKernels()
 weights = [
             nn.Parameter(data = torch.FloatTensor(k).unsqueeze(0).unsqueeze(0), requires_grad=False).cuda()
