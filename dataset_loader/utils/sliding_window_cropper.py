@@ -1,6 +1,9 @@
 import os
 from PIL import Image
 from argparse import ArgumentParser
+from tqdm import tqdm
+
+from label_processor import *
 
 class SlidingWindowCropper:
     @staticmethod
@@ -10,17 +13,7 @@ class SlidingWindowCropper:
             img = img.convert('RGB')
             w, h = img.size
 
-        label = []
-        if os.path.exists(label_path):
-            with open(label_path, 'r') as f:
-                for line in f.readlines():
-                    parts = line.strip().split()
-                    cls_id = int(parts[0])  # 类别
-                    x_center = float(parts[1])  # x中心
-                    y_center = float(parts[2])  # y中心
-                    obj_w = float(parts[3])  # 宽度
-                    obj_h = float(parts[4])  # 高度
-                    label.append([cls_id, x_center, y_center, obj_w, obj_h])
+        label = LabelProcessor.get_label(label_path)
         
         window_x_list = list(range(0, w - window_size + 1, step))
         window_y_list = list(range(0, h - window_size + 1, step))
@@ -85,17 +78,19 @@ class SlidingWindowCropper:
 def parse_args():
     parser = ArgumentParser(description='crop images and labels using sliding window')
 
-    parser.add_argument('--image-dir', type=str, default='/home/lsfwtt/UAV/datasets/dataset_test/images/train')
-    parser.add_argument('--label-dir', type=str, default='/home/lsfwtt/UAV/datasets/dataset_test/labels/train')
+    parser.add_argument('--image-dir', type=str, default='/home/wanmingxuan/datasets/UAV/images/train')
+    parser.add_argument('--label-dir', type=str, default='/home/wanmingxuan/datasets/UAV/labels/train')
     parser.add_argument('--window-size', type=int, default=256)
     parser.add_argument('--step', type=int, default=128)
-    parser.add_argument('--output-dir', type=str, default='/home/lsfwtt/UAV/datasets/dataset_test_cropped')
+    parser.add_argument('--output-dir', type=str, default='/home/wanmingxuan/datasets/UAV/cropped')
 
     return parser.parse_args()
 
 def main():
     args = parse_args()
-    for image_file in os.listdir(args.image_dir):
+    image_files = os.listdir(args.image_dir)
+    tbar = tqdm(image_files, desc='Processing')
+    for image_file in tbar:
         image_path = os.path.join(args.image_dir, image_file)
         label_file = os.path.splitext(image_file)[0] + '.txt'
         label_path = os.path.join(args.label_dir, label_file)

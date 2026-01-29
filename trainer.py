@@ -1,7 +1,6 @@
 from dataset_loader.data import *
 from utils.metric import *
 from utils.fix_random_seed import *
-from utils.sliding_window_inference import *
 from model.HDNet import *
 from model.loss import *
 
@@ -105,15 +104,15 @@ class Trainer(object):
             self.train_loader.sampler.set_epoch(epoch)
         tbar = tqdm(self.train_loader)
         loss_all = AverageMeter()
-        tag = epoch>self.warm_epoch
+        tag = epoch > self.warm_epoch
         for i, (data, mask) in enumerate(tbar):
   
             data = data.to(self.device)
-            labels = mask.to(self.device)
+            mask = mask.to(self.device)
 
-            masks, pred = self.model(data, tag)
+            pred_masks, pred = self.model(data, tag)
 
-            loss = self.loss_fun(pred, masks, labels, self.warm_epoch, epoch)
+            loss = self.loss_fun(pred, pred_masks, mask, self.warm_epoch, epoch)
         
             self.optimizer.zero_grad()
             loss.backward()
@@ -131,14 +130,14 @@ class Trainer(object):
         self.miou.reset()
         self.roc.reset()
         tbar = tqdm(self.val_loader)
-        tag = epoch>self.warm_epoch
+        tag = epoch > self.warm_epoch
         with torch.no_grad():
             for i, (data, mask) in enumerate(tbar):
 
                 data = data.to(self.device)
                 mask = mask.to(self.device)
 
-                pred = sliding_window_inference(self.model, data, self.base_size, self.step, self.device, tag)
+                _, pred = self.model(data, tag)
 
                 self.miou.update(pred, mask)
                 self.roc.update(pred, mask)
